@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 
 import pytumblr
 
+DEFAULT_PAGE_SIZE = 20
+
 
 class TumblrBackup(object):
     def __init__(self, consumer_key, consumer_secret, blog_name,
@@ -17,28 +19,54 @@ class TumblrBackup(object):
 
         self.blog_name = blog_name
         self.export_destination = export_destination
+        self.posts_processed = 0
 
         self.tumblr_client = pytumblr.TumblrRestClient(
             consumer_key, consumer_secret)
 
     def execute(self):
-        posts = self.tumblr_client.posts(self.blog_name)
-        for post in posts['posts']:
-            print('Saving post: {}'.format(post['id']))
-            # create output directory for the post
-            post_directory_name = datetime.utcfromtimestamp(post['timestamp']).strftime('%Y_%m_%d_%H_%M_%S')
-            output_dir = os.path.join(self.export_destination,
-                                      post_directory_name)
-            os.makedirs(output_dir, exist_ok=True)
+        total_posts = self._get_total_posts()
 
-            post_type = post['type']
-            filename = "{}_{}.json".format(post['id'], post_type)
-            output_filepath = os.path.join(output_dir, filename)
-            with open(output_filepath, 'w') as f:
-                f.write(json.dumps(post, indent=2))
+        offset = 0
+        pages, remainder = divmod(total_posts, DEFAULT_PAGE_SIZE)
+        if pages == 0:
+            pages = pages + 1
+        if remainder > 0:
+            pages = pages + 1
 
-            if post_type == 'photo':
-                self._save_photos(post['photos'], output_dir)
+        for i in range(0, pages):
+            params = {'offset': i * DEFAULT_PAGE_SIZE}
+            posts = self.tumblr_client.posts(self.blog_name, **params)
+            for post in posts['posts']:
+                post_directory_name = datetime.utcfromtimestamp(post['timestamp']).strftime('%Y_%m_%d_%H_%M_%S')
+                output_dir = os.path.join(self.export_destination,
+                                          post_directory_name)
+
+                self._save_post(post, output_dir)
+
+                if post['type'] == 'photo':
+                    self._save_photos(post['photos'], output_dir)
+
+        print('Saved {} posts out of {}'.format(self.posts_processed, total_posts))
+
+    def _get_total_posts(self):
+        blog_info = self.tumblr_client.blog_info(self.blog_name)
+        total_posts = blog_info['blog']['posts']
+        print(total_posts)
+        return total_posts
+
+    def _save_post(self, post, output_dir):
+        print('Saving post: {}'.format(post['id']))
+        # create output directory for the post
+        os.makedirs(output_dir, exist_ok=True)
+
+        post_type = post['type']
+        filename = "{}_{}.json".format(post['id'], post_type)
+        output_filepath = os.path.join(output_dir, filename)
+        with open(output_filepath, 'w') as f:
+            f.write(json.dumps(post, indent=2))
+
+        self.posts_processed += self.posts_processed
 
     def _save_photos(self, post_photos, output_dir):
         for photo in post_photos:
