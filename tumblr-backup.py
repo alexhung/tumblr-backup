@@ -30,9 +30,9 @@ class TumblrBackup(object):
         offset = 0
         pages, remainder = divmod(total_posts, DEFAULT_PAGE_SIZE)
         if pages == 0:
-            pages = pages + 1
+            pages += 1
         if remainder > 0:
-            pages = pages + 1
+            pages += 1
 
         for i in range(0, pages):
             params = {'offset': i * DEFAULT_PAGE_SIZE}
@@ -66,7 +66,7 @@ class TumblrBackup(object):
         with open(output_filepath, 'w') as f:
             f.write(json.dumps(post, indent=2))
 
-        self.posts_processed += self.posts_processed
+        self.posts_processed += 1
 
     def _save_photos(self, post_photos, output_dir):
         for photo in post_photos:
