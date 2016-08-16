@@ -5,7 +5,7 @@ import requests
 import shutil
 
 from datetime import datetime
-from urllib.parse import urlparse
+from urlparse import urlparse
 
 import pytumblr
 
@@ -15,7 +15,7 @@ DEFAULT_PAGE_SIZE = 20
 class TumblrBackup(object):
     def __init__(self, consumer_key, consumer_secret, blog_name,
                  export_destination):
-        super().__init__()
+        super(TumblrBackup, self).__init__()
 
         self.blog_name = blog_name
         self.export_destination = export_destination
@@ -25,6 +25,7 @@ class TumblrBackup(object):
             consumer_key, consumer_secret)
 
     def execute(self):
+        print self.blog_name
         total_posts = self._get_total_posts()
 
         offset = 0
@@ -37,6 +38,10 @@ class TumblrBackup(object):
         for i in range(0, pages):
             params = {'offset': i * DEFAULT_PAGE_SIZE}
             posts = self.tumblr_client.posts(self.blog_name, **params)
+            if 'meta' in posts and posts['meta']['status'] != 200:
+                print 'Error getting posts: {}'.format(posts['meta']['msg'])
+                continue
+
             for post in posts['posts']:
                 post_directory_name = datetime.utcfromtimestamp(post['timestamp']).strftime('%Y_%m_%d_%H_%M_%S')
                 output_dir = os.path.join(self.export_destination,
@@ -51,6 +56,10 @@ class TumblrBackup(object):
 
     def _get_total_posts(self):
         blog_info = self.tumblr_client.blog_info(self.blog_name)
+        if 'meta' in blog_info and blog_info['meta']['status'] != 200:
+            print 'Error getting total posts: {}'.format(blog_info['meta']['msg'])
+            return 0
+
         total_posts = blog_info['blog']['posts']
         print(total_posts)
         return total_posts
@@ -58,7 +67,10 @@ class TumblrBackup(object):
     def _save_post(self, post, output_dir):
         print('Saving post: {}'.format(post['id']))
         # create output directory for the post
-        os.makedirs(output_dir, exist_ok=True)
+        try:
+            os.makedirs(output_dir)
+        except OSError:
+            pass
 
         post_type = post['type']
         filename = "{}_{}.json".format(post['id'], post_type)
